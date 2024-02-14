@@ -152,7 +152,7 @@ app.post("/SalesBySubCategory", filterData, (req, res) => {
   return res.status(200).json(result);
 });
 
-app.post("/SalesBySegment", (req, res) => {
+app.post("/SalesBySegment", filterData, (req, res) => {
   const salesBySegment = req.filteredData.reduce((acc, row) => {
     const Segment = row.Segment;
     const sales = row.Sales;
