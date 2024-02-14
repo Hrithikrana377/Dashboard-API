@@ -27,6 +27,18 @@ app.use((req, res, next) => {
   });
 });
 
+// Common filtering logic
+const filterData = (req, res, next) => {
+  const { startingDate, endDate, state } = req.body;
+  req.filteredData = req.data.usersData.filter((row) => {
+    const fromDate = new Date(startingDate);
+    const toDate = new Date(endDate);
+    const orderDate = new Date(row["OrderDate"]);
+    return row.State === state && orderDate <= toDate && orderDate >= fromDate;
+  });
+  next();
+};
+
 app.get("/usersData", (req, res) => {
   const salesData = req.data && req.data.usersData ? req.data.usersData : [];
   res.json(salesData);
@@ -53,173 +65,105 @@ app.get("/states", (req, res) => {
     : res.status(404).json({ error: "State is not available" });
 });
 
-app.post("/summary", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData
-    .filter((row) => {
-      const fromDate = new Date(startingDate);
-      const todate = new Date(endDate);
-      const orderDate = new Date(row["OrderDate"]);
-      return (
-        row.State === state && orderDate <= todate && orderDate >= fromDate
-      );
-    })
-    .reduce(
-      (acc, row) => {
-        return {
-          totalSales: Math.round(acc.totalSales + row.Sales),
-          quantitySold: acc.quantitySold + row.Quantity,
-          discount: acc.discount + row.Discount,
-          profit: Math.round(acc.profit + row.Profit),
-          saleCount: acc.saleCount + 1,
-        };
-      },
-      { totalSales: 0, profit: 0, quantitySold: 0, discount: 0, saleCount: 0 }
-    );
+app.post("/summary", filterData, (req, res) => {
+  const data = req.filteredData.reduce(
+    (acc, row) => {
+      return {
+        totalSales: Math.round(acc.totalSales + row.Sales),
+        quantitySold: acc.quantitySold + row.Quantity,
+        discount: acc.discount + row.Discount,
+        profit: Math.round(acc.profit + row.Profit),
+        saleCount: acc.saleCount + 1,
+      };
+    },
+    { totalSales: 0, profit: 0, quantitySold: 0, discount: 0, saleCount: 0 }
+  );
   if (data.saleCount > 0) {
     data.discount = Math.round((data.discount / data.saleCount) * 10000) / 100;
   }
   return res.status(200).json(data);
 });
 
-app.post("/SalesByCity", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData.filter((row) => {
-    const fromDate = new Date(startingDate);
-    const todate = new Date(endDate);
-    const orderDate = new Date(row["OrderDate"]);
-    return row.State === state && orderDate <= todate && orderDate >= fromDate;
-  });
-
-  const salesByCity = {};
-
-  data.forEach((row) => {
+app.post("/SalesByCity", filterData, (req, res) => {
+  const salesByCity = req.filteredData.reduce((acc, row) => {
     const city = row.City;
     const sales = row.Sales;
 
-    if (salesByCity[city]) {
-      salesByCity[city] += sales;
-    } else {
-      salesByCity[city] = sales;
-    }
-  });
-  const result = Object.keys(salesByCity)
-    .map((label) => ({
+    acc[city] = (acc[city] || 0) + sales;
+
+    return acc;
+  }, {});
+
+  const result = Object.entries(salesByCity)
+    .map(([label, value]) => ({
       label,
-      value: Math.round(salesByCity[label]),
+      value: Math.round(value),
     }))
     .slice(0, 7);
   return res.status(200).json(result);
 });
 
-app.post("/SalesByProducts", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData.filter((row) => {
-    const fromDate = new Date(startingDate);
-    const todate = new Date(endDate);
-    const orderDate = new Date(row["OrderDate"]);
-    return row.State === state && orderDate <= todate && orderDate >= fromDate;
-  });
-
-  const salesByProduct = {};
-
-  data.forEach((row) => {
+app.post("/SalesByProducts", filterData, (req, res) => {
+  const salesByProduct = req.filteredData.reduce((acc, row) => {
     const productName = row.ProductName;
     const sales = row.Sales;
 
-    if (salesByProduct[productName]) {
-      salesByProduct[productName] += sales;
-    } else {
-      salesByProduct[productName] = sales;
-    }
-  });
-  const result = Object.keys(salesByProduct).map((label) => ({
+    acc[productName] = (acc[productName] || 0) + sales;
+
+    return acc;
+  }, {});
+
+  const result = Object.entries(salesByProduct).map(([label, value]) => ({
     label,
-    value: Math.round(salesByProduct[label]),
+    value: Math.round(value),
   }));
   return res.status(200).json(result);
 });
 
-app.post("/SalesByCategory", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData.filter((row) => {
-    const fromDate = new Date(startingDate);
-    const todate = new Date(endDate);
-    const orderDate = new Date(row["OrderDate"]);
-    return row.State === state && orderDate <= todate && orderDate >= fromDate;
-  });
-
-  const salesByCategory = {};
-
-  data.forEach((row) => {
+app.post("/SalesByCategory", filterData, (req, res) => {
+  const salesByCategory = req.filteredData.reduce((acc, row) => {
     const category = row.Category;
     const sales = row.Sales;
 
-    if (salesByCategory[category]) {
-      salesByCategory[category] += sales;
-    } else {
-      salesByCategory[category] = sales;
-    }
-  });
-  const result = Object.keys(salesByCategory).map((label) => ({
+    acc[category] = (acc[category] || 0) + sales;
+    return acc;
+  }, {});
+
+  const result = Object.entries(salesByCategory).map(([label, value]) => ({
     label,
-    value: Math.round(salesByCategory[label]),
+    value: Math.round(value),
   }));
   return res.status(200).json(result);
 });
 
-app.post("/SalesBySubCategory", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData.filter((row) => {
-    const fromDate = new Date(startingDate);
-    const todate = new Date(endDate);
-    const orderDate = new Date(row["OrderDate"]);
-    return row.State === state && orderDate <= todate && orderDate >= fromDate;
-  });
-
-  const salesBySubCategory = {};
-
-  data.forEach((row) => {
+app.post("/SalesBySubCategory", filterData, (req, res) => {
+  const salesBySubCategory = req.filteredData.reduce((acc, row) => {
     const subCategory = row.SubCategory;
     const sales = row.Sales;
 
-    if (salesBySubCategory[subCategory]) {
-      salesBySubCategory[subCategory] += sales;
-    } else {
-      salesBySubCategory[subCategory] = sales;
-    }
-  });
-  const result = Object.keys(salesBySubCategory).map((label) => ({
+    acc[subCategory] = (acc[subCategory] || 0) + sales;
+    return acc;
+  }, {});
+
+  const result = Object.entries(salesBySubCategory).map(([label, value]) => ({
     label,
-    value: Math.round(salesBySubCategory[label]),
+    value: Math.round(value),
   }));
   return res.status(200).json(result);
 });
 
 app.post("/SalesBySegment", (req, res) => {
-  const { startingDate, endDate, state } = req.body;
-  const data = req.data.usersData.filter((row) => {
-    const fromDate = new Date(startingDate);
-    const todate = new Date(endDate);
-    const orderDate = new Date(row["OrderDate"]);
-    return row.State === state && orderDate <= todate && orderDate >= fromDate;
-  });
-
-  const salesBySegment = {};
-
-  data.forEach((row) => {
+  const salesBySegment = req.filteredData.reduce((acc, row) => {
     const Segment = row.Segment;
     const sales = row.Sales;
 
-    if (salesBySegment[Segment]) {
-      salesBySegment[Segment] += sales;
-    } else {
-      salesBySegment[Segment] = sales;
-    }
-  });
-  const result = Object.keys(salesBySegment).map((label) => ({
+    acc[Segment] = (acc[Segment] || 0) + sales;
+    return acc;
+  }, {});
+
+  const result = Object.entries(salesBySegment).map(([label, value]) => ({
     label,
-    value: Math.round(salesBySegment[label]),
+    value: Math.round(value),
   }));
   return res.status(200).json(result);
 });
