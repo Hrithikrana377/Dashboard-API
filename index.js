@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 });
 
 // Common filtering logic
-const filterData = (req, res, next) => {
+const filterData = (req, _res, next) => {
   const { startingDate, endDate, state } = req.body;
   req.filteredData = req.data.usersData.filter((row) => {
     const fromDate = new Date(startingDate);
